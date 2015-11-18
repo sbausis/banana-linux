@@ -34,3 +34,7 @@ Session.vim
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+.build
+.cache
+.source
