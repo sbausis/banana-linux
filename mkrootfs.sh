@@ -83,7 +83,7 @@ function chroot_run() {
 function chroot_install_packages() {
 	DIRECTORY="$1"
 	PACKAGES="$2"
-	LC_ALL=C LANGUAGE=C LANG=C DEBIAN_FRONTEND=noninteractive chroot "${DIRECTORY}" /bin/bash -c "apt-get -y -qq install ${PACKAGES}"
+	LC_ALL=C LANGUAGE=C LANG=C DEBIAN_FRONTEND=noninteractive chroot "${DIRECTORY}" /bin/bash -c "apt-get -y -q install ${PACKAGES}"
 }
 
 ################################################################################
@@ -149,7 +149,7 @@ if [ -z "${SOURCEDIR}" ]; then
 fi
 
 if [ -z "${OUTFILE}" ]; then
-	OUTFILE="${BUILDDIR}/rootfs/rootfs.${SUITE}.${ARCH}.tgz"
+	OUTFILE="${CACHEDIR}/rootfs/rootfs.${SUITE}.${ARCH}.tgz"
 fi
 
 if [ -z "${SUITE}" ] && [ -z "${ARCH}" ] && [ -z "${OUTDIR}" ] && [ -z "${BUILDDIR}" ] && [ -z "${CACHEDIR}" ] && [ -z "${SOURCEDIR}" ] && [ -z "${OUTFILE}" ]; then
@@ -238,10 +238,9 @@ EOF
 	umount -l ${TEMPDIR}/dev
 	umount -l ${TEMPDIR}/proc
 	umount -l ${TEMPDIR}/sys
-
-	KILLPROC=$(ps -uax | pgrep ntpd |        tail -1); if [ -n "$KILLPROC" ]; then kill -9 $KILLPROC; fi  
-	KILLPROC=$(ps -uax | pgrep dbus-daemon | tail -1); if [ -n "$KILLPROC" ]; then kill -9 $KILLPROC; fi  
 	
+	KILLPROC=$(ps -uax | pgrep ntpd |        tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
+	KILLPROC=$(ps -uax | pgrep dbus-daemon | tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	
 	FILENAME=$(basename "${OUTFILE}")
 	tar -czp -C ${TEMPDIR} -f ${TEMPDIR}/../${FILENAME} --exclude=dev/* --exclude=proc/* --exclude=run/* --exclude=tmp/* --exclude=mnt/* .
@@ -250,8 +249,8 @@ EOF
 	[ -d "${SOURCEDIR}/rootfs" ] && rm -Rf ${SOURCEDIR}/rootfs
 	[ -d "${BUILDDIR}/rootfs" ] && rm -Rf ${BUILDDIR}/rootfs
 	
-	mkdir -p ${CACHEDIR}/rootfs
-	mv -f ${TEMPDIR}/../${FILENAME} ${CACHEDIR}/rootfs/${FILENAME}
+	mkdir -p $(dirname ${OUTFILE})
+	mv -f ${TEMPDIR}/../${FILENAME} ${OUTFILE}
 	
 	mkdir -p ${SOURCEDIR}/rootfs
 	mv -f ${TEMPDIR}/* ${SOURCEDIR}/rootfs/

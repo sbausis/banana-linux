@@ -188,6 +188,44 @@ if [ ! -d "${BUILDDIR}/sunxi-tools/sunxi-tools_target" ]; then
 	
 fi
 
+#VERSION=$(cd ${SOURCEDIR}/u-boot-sunxi && make -s ubootversion)
+#DEBFOLDER="linux-u-boot-sun7i"
+#DEBNAME="${DEBFOLDER}_${VERSION}_armhf"
+#if [ ! -f "${BUILDDIR}/u-boot-sunxi/${DEBNAME}.deb" ]; then
+#	
+#	mkdir -p ${TEMPDIR}/${DEBFOLDER}/DEBIAN
+#	mkdir -p ${TEMPDIR}/${DEBFOLDER}/usr/lib/${DEBNAME}
+#	
+#	cat <<EOF > ${TEMPDIR}/${DEBFOLDER}/DEBIAN/postinst
+##!/bin/bash
+#set -e
+#if [[ \$DEVICE == "" ]]; then DEVICE="/dev/mmcblk0"; fi
+#( dd if=/usr/lib/${DEBNAME}/u-boot-sunxi-with-spl.bin of=\$DEVICE bs=1024 seek=8 status=noxfer ) > /dev/null 2>&1	
+#exit 0
+#EOF
+#	chmod 755 ${TEMPDIR}/${DEBFOLDER}/DEBIAN/postinst
+#	
+#	cat <<EOF > ${TEMPDIR}/${DEBFOLDER}/DEBIAN/control
+#Package: ${DEBFOLDER}
+#Version: ${VERSION}
+#Architecture: armhf
+#Maintainer: Simon Pascal Baur <sbausis@gmx.net>
+#Installed-Size: 1
+#Section: kernel
+#Priority: optional
+#Description: Das U-Boot ${VERSION} for sun7i Platform
+#EOF
+#	
+#	cp -f ${BUILDDIR}/u-boot-sunxi/u-boot-sunxi-with-spl.bin ${TEMPDIR}/${DEBFOLDER}/usr/lib/${DEBNAME}/u-boot-sunxi-with-spl.bin
+#	
+#	dpkg -b ${TEMPDIR}/${DEBFOLDER} ${TEMPDIR}/${DEBNAME}.deb
+#	
+#	FILESIZE=$(wc -c ${TEMPDIR}/${DEBNAME}.deb | cut -f 1 -d ' ')
+#	[ $(wc -c ${TEMPDIR}/${DEBNAME}.deb | cut -f 1 -d ' ') -lt 50000 ] && (rm -f ${TEMPDIR}/${DEBNAME}.deb; clean_up 2)
+#	cp -f ${TEMPDIR}/${DEBNAME}.deb ${BUILDDIR}/u-boot-sunxi/${DEBNAME}.deb
+#	
+#fi
+
 STOPTIME=`date +%s`
 RUNTIME=$(((STOPTIME-STARTTIME)/60))
 echo "Runtime: $RUNTIME min"

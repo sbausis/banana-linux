@@ -177,7 +177,7 @@ if [ ! -d "${SOURCEDIR}/linux-sunxi" ]; then
 	
 	PATCHFOLDER="${SCRIPTDIR}/files/patches/linux-sunxi"
 	for PATCHFILE in `ls ${PATCHFOLDER}/*.patch`; do
-		if [ "${PATCHFILE#*.}" == "rev.patch" ]; then
+		if [ "${PATCHFILE%%*.rev.patch}" == "" ]; then
 			reverse_patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFILE}"
 		else
 			patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFILE}"
