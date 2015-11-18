@@ -222,6 +222,8 @@ STOPTIME=`date +%s`
 RUNTIME=$(((STOPTIME-STARTTIME)/60))
 echo "Runtime: $RUNTIME min"
 
+sleep 1
+
 clean_up 0
 
 ################################################################################

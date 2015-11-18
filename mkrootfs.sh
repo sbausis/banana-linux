@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-set -x
+#set -x
 
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -175,7 +175,6 @@ fi
 
 if [ ! -f "${OUTFILE}" ]; then
 	
-	#debootstrap --include=openssh-server,debconf-utils --arch=armhf --foreign ${SUITE} ${TEMPDIR}
 	debootstrap --arch=${ARCH} --foreign ${SUITE} ${TEMPDIR}
 
 	if [ "${ARCH}" == "armhf" ]; then
@@ -262,6 +261,8 @@ fi
 STOPTIME=`date +%s`
 RUNTIME=$(((STOPTIME-STARTTIME)/60))
 echo "Runtime: $RUNTIME min"
+
+sleep 1
 
 clean_up 0
 

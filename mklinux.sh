@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-set -x
+#set -x
 
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -183,14 +183,6 @@ if [ ! -d "${SOURCEDIR}/linux-sunxi" ]; then
 			patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFILE}"
 		fi
 	done
-	#reverse_patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFOLDER}/001_gcc_4.8.x_compiler.rev.patch"
-	#patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFOLDER}/002_dev-packaging.patch"
-	#patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFOLDER}/003_patch-3.4.108-109.patch"
-	#patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFOLDER}/004_patch-3.4.109-110.patch"
-	#patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFOLDER}/005_linux-sunxi-3.4.108-overlayfs.patch"
-	#patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFOLDER}/006_a20-temp.patch"
-	#patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFOLDER}/008_dev-i2s-spdif.patch"
-	#patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFOLDER}/009_clustering-patch-3.4-ja1.patch"
 	
 	[ -d "${BUILDDIR}/linux-sunxi" ] && rm -Rf ${BUILDDIR}/linux-sunxi
 	
@@ -249,6 +241,8 @@ fi
 STOPTIME=`date +%s`
 RUNTIME=$(((STOPTIME-STARTTIME)/60))
 echo "Runtime: $RUNTIME min"
+
+sleep 1
 
 clean_up 0
 
