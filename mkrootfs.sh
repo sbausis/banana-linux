@@ -30,14 +30,17 @@ LOCKFILE=${TEMPDIR}.lock
 ################################################################################
 ## Need CleanUp
 
+function umount_all() {
+	sync
+	[ -n "$(mount | grep ${TEMPDIR}/dev/pts)" ] && (umount ${TEMPDIR}/dev/pts || umount -f ${TEMPDIR}/dev/pts)
+	[ -n "$(mount | grep ${TEMPDIR}/dev)" ] && (umount ${TEMPDIR}/dev || umount -f ${TEMPDIR}/dev)
+	[ -n "$(mount | grep ${TEMPDIR}/proc)" ] && (umount ${TEMPDIR}/proc || umount -f ${TEMPDIR}/proc)
+	[ -n "$(mount | grep ${TEMPDIR}/sys)" ] && (umount ${TEMPDIR}/sys || umount -f ${TEMPDIR}/sys)
+}
 function clean_up() {
 	
 	echo "Clean up ..."
-	[ -n "$(mount | grep ${TEMPDIR}/dev/pts)" ] && umount -f ${TEMPDIR}/dev/pts
-	[ -n "$(mount | grep ${TEMPDIR}/dev)" ] && umount -f ${TEMPDIR}/dev
-	[ -n "$(mount | grep ${TEMPDIR}/proc)" ] && umount -f ${TEMPDIR}/proc
-	[ -n "$(mount | grep ${TEMPDIR}/sys)" ] && umount -f ${TEMPDIR}/sys
-	sync
+	umount_all
 	rm -Rf "${TEMPDIR}"
 	rm -f "${LOCKFILE}"
 	
@@ -175,6 +178,8 @@ fi
 
 if [ ! -f "${OUTFILE}" ]; then
 	
+	umount_all
+	
 	debootstrap --arch=${ARCH} --foreign ${SUITE} ${TEMPDIR}
 
 	if [ "${ARCH}" == "armhf" ]; then
@@ -224,20 +229,15 @@ EOF
 	sed -e 's/CHARMAP=".*"/CHARMAP="'$CONSOLE_CHAR'"/g' -i ${TEMPDIR}/etc/default/console-setup
 	
 	chroot_run ${TEMPDIR} "apt-get clean"
-	chroot_run ${TEMPDIR} "sync"
 	chroot_run ${TEMPDIR} "unset DEBIAN_FRONTEND"
+	
+	chroot_run ${TEMPDIR} "sync"
+	umount_all
 	
 	if [ "${ARCH}" == "armhf" ]; then
 		rm -f ${TEMPDIR}/usr/bin/qemu-arm-static
 	fi
 	rm -f ${TEMPDIR}/etc/resolv.conf
-	
-	sync
-
-	umount -l ${TEMPDIR}/dev/pts
-	umount -l ${TEMPDIR}/dev
-	umount -l ${TEMPDIR}/proc
-	umount -l ${TEMPDIR}/sys
 	
 	KILLPROC=$(ps -uax | pgrep ntpd |        tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	KILLPROC=$(ps -uax | pgrep dbus-daemon | tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;

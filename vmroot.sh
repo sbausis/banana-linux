@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-#set -x
+set -x
 
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -30,14 +30,18 @@ LOCKFILE=${TEMPDIR}.lock
 ################################################################################
 ## Need CleanUp
 
+function umount_all() {
+	sync
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/dev/pts)" ] && (umount ${SOURCEDIR}/vmroot/dev/pts || umount -f ${SOURCEDIR}/vmroot/dev/pts)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/dev)" ] && (umount ${SOURCEDIR}/vmroot/dev || umount -f ${SOURCEDIR}/vmroot/dev)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/proc)" ] && (umount ${SOURCEDIR}/vmroot/proc || umount -f ${SOURCEDIR}/vmroot/proc)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/sys)" ] && (umount ${SOURCEDIR}/vmroot/sys || umount -f ${SOURCEDIR}/vmroot/sys)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/tmp)" ] && (umount ${SOURCEDIR}/vmroot/tmp || umount -f ${SOURCEDIR}/vmroot/tmp)
+}
 function clean_up() {
 	
 	echo "Clean up ..."
-	[ -n "$(mount | grep ${TEMPDIR}/dev/pts)" ] && umount -f ${TEMPDIR}/dev/pts
-	[ -n "$(mount | grep ${TEMPDIR}/dev)" ] && umount -f ${TEMPDIR}/dev
-	[ -n "$(mount | grep ${TEMPDIR}/proc)" ] && umount -f ${TEMPDIR}/proc
-	[ -n "$(mount | grep ${TEMPDIR}/sys)" ] && umount -f ${TEMPDIR}/sys
-	sync
+	umount_all
 	rm -Rf "${TEMPDIR}"
 	rm -f "${LOCKFILE}"
 	
@@ -217,12 +221,17 @@ fi
 
 if [ -n "${INSTALL_PACKAGES}" ] || [ -n "${RUN_COMMAND}" ] || [ -n "${RUN_SCRIPT}" ] || [ "${STARTCHROOT}" == "0" ]; then
 	
+	umount_all
+	
 	if [ "${ARCH}" == "armhf" ]; then
 		cp -f /usr/bin/qemu-arm-static ${SOURCEDIR}/vmroot/usr/bin/qemu-arm-static
 		test -e /proc/sys/fs/binfmt_misc/qemu-arm || update-binfmts --enable qemu-arm
 	fi
 	cp -f /etc/resolv.conf ${SOURCEDIR}/vmroot/etc/resolv.conf
-
+	cp -f /etc/mtab ${SOURCEDIR}/vmroot/etc/mtab
+	echo "vmroot" > ${SOURCEDIR}/vmroot/etc/hostname
+	
+	mount --bind ${TEMPDIR} ${SOURCEDIR}/vmroot/tmp
 	mount -t proc chproc ${SOURCEDIR}/vmroot/proc
 	mount -t sysfs chsys ${SOURCEDIR}/vmroot/sys
 	mount -t devtmpfs chdev ${SOURCEDIR}/vmroot/dev || mount --bind /dev ${SOURCEDIR}/vmroot/dev
@@ -239,23 +248,25 @@ if [ -n "${INSTALL_PACKAGES}" ] || [ -n "${RUN_COMMAND}" ] || [ -n "${RUN_SCRIPT
 	[ "${STARTCHROOT}" == "0" ] && LC_ALL=C LANGUAGE=C LANG=C chroot ${SOURCEDIR}/vmroot /bin/bash
 	
 	chroot_run ${SOURCEDIR}/vmroot "sync"
-	sync
+	umount_all
 	
-	umount -l ${SOURCEDIR}/vmroot/dev/pts
-	umount -l ${SOURCEDIR}/vmroot/dev
-	umount -l ${SOURCEDIR}/vmroot/proc
-	umount -l ${SOURCEDIR}/vmroot/sys
+	if [ "${ARCH}" == "armhf" ]; then
+		rm -f ${TEMPDIR}/usr/bin/qemu-arm-static
+	fi
+	rm -f ${TEMPDIR}/etc/resolv.conf
 	
 	KILLPROC=$(ps -uax | pgrep ntpd |        tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	KILLPROC=$(ps -uax | pgrep dbus-daemon | tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	
-	test -e /proc/sys/fs/binfmt_misc/qemu-arm || update-binfmts --enable qemu-arm
+	test -e /proc/sys/fs/binfmt_misc/qemu-arm || update-binfmts --disable qemu-arm
 	
 	echo "### DONE - Closed VM ###"
 	
 fi
 
 if [ "${SAVE_CHANGES}" == "0" ]; then
+	
+	umount_all
 	
 	FILENAME=$(basename "${OUTFILE}")
 	tar -czp -C ${SOURCEDIR}/vmroot -f ${TEMPDIR}/${FILENAME} --exclude=dev/* --exclude=proc/* --exclude=run/* --exclude=tmp/* --exclude=mnt/* .
