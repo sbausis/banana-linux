@@ -188,6 +188,15 @@ if [ ! -d "${SOURCEDIR}/linux-sunxi" ]; then
 	
 fi
 
+PATCHFOLDER="${SCRIPTDIR}/files/patches/linux-sunxi"
+for PATCHFILE in `ls ${PATCHFOLDER}/*.patch`; do
+	if [ "${PATCHFILE%%*.rev.patch}" == "" ]; then
+		reverse_patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFILE}"
+	else
+		patch_folder "${SOURCEDIR}/linux-sunxi" "${PATCHFILE}"
+	fi
+done
+
 TMPBUILDDIR=${BUILDDIR}/linux-sunxi/.build
 mkdir -p ${TMPBUILDDIR} 2>/dev/null
 mkdir -p ${TMPBUILDDIR}/drivers/gpu/mali/mali 2>/dev/null

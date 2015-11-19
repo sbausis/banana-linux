@@ -264,6 +264,7 @@ if [ -n "${INSTALL_PACKAGES}" ] || [ -n "${RUN_COMMAND}" ] || [ -n "${RUN_SCRIPT
 	
 	KILLPROC=$(ps -uax | pgrep ntpd |        tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	KILLPROC=$(ps -uax | pgrep dbus-daemon | tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
+	KILLPROC=$(ps -uax | pgrep rsyslogd |    tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	
 	test -e /proc/sys/fs/binfmt_misc/qemu-arm || update-binfmts --disable qemu-arm
 	

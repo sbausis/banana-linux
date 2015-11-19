@@ -8,6 +8,7 @@ export LC_ALL=C LANGUAGE=C LANG=C
 SCRIPTNAME=$(basename "$0")
 BASE=$(cd `dirname $0` && pwd)
 
+mkdir -p ${BASE}/.build
 LOGFILE=${BASE}/.build/${SCRIPTNAME}.log
 DIALOGTITLE="# Banana-Debian Build"
 
