@@ -32,17 +32,19 @@ LOCKFILE=${TEMPDIR}.lock
 
 function clean_up() {
 	
-	echo "Clean up ..."
+	display_alert "info" "Clean up ..."
 	
 	rm -Rf "${TEMPDIR}"
 	rm -f "${LOCKFILE}"
 	
 	trap "" SIGHUP SIGINT SIGTERM SIGQUIT EXIT
 	if [ "$1" != "0" ]; then
-		echo "ERROR ..."
+		display_alert "error" "failed ..."
+		display_alert "Runtime: $RUNTIME min"
 		exit $1
 	else
-		#echo " -> Done ..."
+		display_alert "ok" "Done ..."
+		display_alert "Runtime: $RUNTIME min"
 		exit 0
 	fi
 }
@@ -65,6 +67,17 @@ function help_exit() {
 }
 
 ################################################################################
+
+display_alert() {
+	local STR=""
+	[ "$3" != "" ] && STR="[\e[0;33m $3 \x1B[0m]"
+	if [ "$1" == "error" ]; then   echo -e "[\e[0;31m error \x1B[0m] $2 $STR"
+	elif [ "$1" == "warn" ]; then 	echo -e "[\e[0;36m warn \x1B[0m] $2 $STR"
+	elif [ "$1" == "info" ]; then 	echo -e "[\e[0;33m info \x1B[0m] $2 $STR"
+	elif [ "$1" == "ok" ]; then 	echo -e "[\e[0;32m o.k. \x1B[0m] $2 $STR"
+	else 							  echo -e "[\e[0;34m $1 \x1B[0m] $2 $STR"
+	fi
+}
 
 ################################################################################
 ## Need LOCKFILE
@@ -117,7 +130,7 @@ fi
 
 ################################################################################
 
-echo "[ ${SCRIPTNAME} ] ${BUILDDIR} ${CACHEDIR} ${SOURCEDIR}"
+display_alert "${SCRIPTNAME}" "${BUILDDIR} ${CACHEDIR} ${SOURCEDIR}"
 STARTTIME=`date +%s`
 
 mkdir -p ${BUILDDIR}
@@ -125,20 +138,24 @@ mkdir -p ${CACHEDIR}
 mkdir -p ${SOURCEDIR}
 
 if [ "$FORCEBUILD" == "0" ]; then
+	display_alert "warn" "Force redownload"
 	[ -d "${CACHEDIR}/sunxi-tools" ] && rm -Rf ${CACHEDIR}/sunxi-tools
 	[ -d "${SOURCEDIR}/sunxi-tools" ] && rm -Rf ${SOURCEDIR}/sunxi-tools
 	[ -d "${BUILDDIR}/sunxi-tools" ] && rm -Rf ${BUILDDIR}/sunxi-tools
 fi
 
 if [ "$FORCEEXTRACT" == "0" ]; then
+	display_alert "warn" "Force rebuild"
 	[ -d "${SOURCEDIR}/sunxi-tools" ] && rm -Rf ${SOURCEDIR}/sunxi-tools
 	[ -d "${BUILDDIR}/sunxi-tools" ] && rm -Rf ${BUILDDIR}/sunxi-tools
 fi
 
 if [ ! -f "${CACHEDIR}/sunxi-tools/sunxi-tools.src.tgz" ]; then
 	
-	git clone https://github.com/linux-sunxi/sunxi-tools ${TEMPDIR}/sunxi-tools
-	tar -cz -C ${TEMPDIR} -f ${TEMPDIR}/sunxi-tools.src.tgz sunxi-tools
+	display_alert "info" "Downloading Sources"
+	git clone https://github.com/linux-sunxi/sunxi-tools ${TEMPDIR}/sunxi-tools >/dev/null 2>&1
+	display_alert "info" "Save Sources to Cache"
+	tar -cz -C ${TEMPDIR} -f ${TEMPDIR}/sunxi-tools.src.tgz sunxi-tools >/dev/null 2>&1
 	
 	[ -d "${CACHEDIR}/sunxi-tools" ] && rm -Rf ${CACHEDIR}/sunxi-tools
 	[ -d "${SOURCEDIR}/sunxi-tools" ] && rm -Rf ${SOURCEDIR}/sunxi-tools
@@ -154,7 +171,8 @@ fi
 
 if [ ! -d "${SOURCEDIR}/sunxi-tools" ]; then
 	
-	tar -xz -C ${SOURCEDIR} -f ${CACHEDIR}/sunxi-tools/sunxi-tools.src.tgz
+	display_alert "info" "Extracting Sources"
+	tar -xz -C ${SOURCEDIR} -f ${CACHEDIR}/sunxi-tools/sunxi-tools.src.tgz >/dev/null 2>&1
 	
 	[ -d "${BUILDDIR}/sunxi-tools" ] && rm -Rf ${BUILDDIR}/sunxi-tools
 	
@@ -164,11 +182,23 @@ if [ ! -d "${BUILDDIR}/sunxi-tools/sunxi-tools_host" ]; then
 	
 	cd ${SOURCEDIR}/sunxi-tools
 	
-	make -j1 clean
-	make -j5 sunxi-fexc sunxi-bootinfo sunxi-fel sunxi-nand-part
+	make -j1 clean >/dev/null 2>&1
+	display_alert "info" "clean Build"
+	
+	make -j1 sunxi-fexc >/dev/null 2>&1
+	display_alert "ok" "sunxi-fexc"
+	
+	make -j1 sunxi-bootinfo >/dev/null 2>&1
+	display_alert "ok" "sunxi-bootinfo"
+	
+	make -j1 sunxi-fel >/dev/null 2>&1
+	display_alert "ok" "sunxi-fel"
+	
+	make -j1 sunxi-nand-part >/dev/null 2>&1
+	display_alert "ok" "sunxi-nand-part"
 	
 	mkdir -p ${BUILDDIR}/sunxi-tools/sunxi-tools_host
-	cp -f sunxi-fexc sunxi-bootinfo sunxi-fel sunxi-nand-part ${BUILDDIR}/sunxi-tools/sunxi-tools_host/
+	mv -f sunxi-fexc sunxi-bootinfo sunxi-fel sunxi-nand-part ${BUILDDIR}/sunxi-tools/sunxi-tools_host/
 	(cd ${BUILDDIR}/sunxi-tools/sunxi-tools_host && ln -fs ./sunxi-fexc ./sunxi-bin2fex)
 	(cd ${BUILDDIR}/sunxi-tools/sunxi-tools_host && ln -fs ./sunxi-fexc ./sunxi-fex2bin)
 	
@@ -178,11 +208,23 @@ if [ ! -d "${BUILDDIR}/sunxi-tools/sunxi-tools_target" ]; then
 	
 	cd ${SOURCEDIR}/sunxi-tools
 	
-	make -j1 CC=arm-linux-gnueabi-gcc clean
-	make -j5 CC=arm-linux-gnueabi-gcc sunxi-fexc sunxi-bootinfo sunxi-nand-part sunxi-pio
+	make -j1 CC=arm-linux-gnueabi-gcc clean >/dev/null 2>&1
+	display_alert "info" "clean Build" "armhf"
+	
+	make -j1 CC=arm-linux-gnueabi-gcc sunxi-fexc >/dev/null 2>&1
+	display_alert "ok" "sunxi-fexc" "armhf"
+	
+	make -j1 CC=arm-linux-gnueabi-gcc sunxi-bootinfo >/dev/null 2>&1
+	display_alert "ok" "sunxi-bootinfo" "armhf"
+	
+	make -j1 CC=arm-linux-gnueabi-gcc sunxi-nand-part >/dev/null 2>&1
+	display_alert "ok" "sunxi-nand-part" "armhf"
+	
+	make -j1 CC=arm-linux-gnueabi-gcc sunxi-pio >/dev/null 2>&1
+	display_alert "ok" "sunxi-pio" "armhf"
 	
 	mkdir -p ${BUILDDIR}/sunxi-tools/sunxi-tools_target
-	cp -f sunxi-fexc sunxi-bootinfo sunxi-nand-part sunxi-pio ${BUILDDIR}/sunxi-tools/sunxi-tools_target/
+	mv -f sunxi-fexc sunxi-bootinfo sunxi-nand-part sunxi-pio ${BUILDDIR}/sunxi-tools/sunxi-tools_target/
 	(cd ${BUILDDIR}/sunxi-tools/sunxi-tools_target && ln -fs ./sunxi-fexc ./sunxi-bin2fex)
 	(cd ${BUILDDIR}/sunxi-tools/sunxi-tools_target && ln -fs ./sunxi-fexc ./sunxi-fex2bin)
 	
@@ -228,7 +270,6 @@ fi
 
 STOPTIME=`date +%s`
 RUNTIME=$(((STOPTIME-STARTTIME)/60))
-echo "Runtime: $RUNTIME min"
 
 sleep 1
 
