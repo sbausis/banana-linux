@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-set -x
+#set -x
 
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -32,11 +32,13 @@ LOCKFILE=${TEMPDIR}.lock
 
 function umount_all() {
 	sync
+	set +e
 	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/dev/pts)" ] && (umount ${SOURCEDIR}/vmroot/dev/pts || umount -f ${SOURCEDIR}/vmroot/dev/pts)
 	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/dev)" ] && (umount ${SOURCEDIR}/vmroot/dev || umount -f ${SOURCEDIR}/vmroot/dev)
 	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/proc)" ] && (umount ${SOURCEDIR}/vmroot/proc || umount -f ${SOURCEDIR}/vmroot/proc)
 	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/sys)" ] && (umount ${SOURCEDIR}/vmroot/sys || umount -f ${SOURCEDIR}/vmroot/sys)
 	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/tmp)" ] && (umount ${SOURCEDIR}/vmroot/tmp || umount -f ${SOURCEDIR}/vmroot/tmp)
+	set -e
 }
 function clean_up() {
 	
@@ -229,6 +231,7 @@ if [ -n "${INSTALL_PACKAGES}" ] || [ -n "${RUN_COMMAND}" ] || [ -n "${RUN_SCRIPT
 	fi
 	cp -f /etc/resolv.conf ${SOURCEDIR}/vmroot/etc/resolv.conf
 	cp -f /etc/mtab ${SOURCEDIR}/vmroot/etc/mtab
+	#cp /proc/mounts /mnt/etc/mtab  
 	echo "vmroot" > ${SOURCEDIR}/vmroot/etc/hostname
 	
 	mount --bind ${TEMPDIR} ${SOURCEDIR}/vmroot/tmp
@@ -239,6 +242,8 @@ if [ -n "${INSTALL_PACKAGES}" ] || [ -n "${RUN_COMMAND}" ] || [ -n "${RUN_SCRIPT
 	
 	echo "### We are on VM right now ###"
 	
+	chroot_run ${SOURCEDIR}/vmroot "dpkg-divert --local --rename --add /sbin/initctl; ln -s /bin/true /sbin/initctl"
+	
 	[ -n "${INSTALL_PACKAGES}" ] && chroot_install_packages ${SOURCEDIR}/vmroot "${INSTALL_PACKAGES}"
 	
 	[ -n "${RUN_COMMAND}" ] && chroot_run ${SOURCEDIR}/vmroot "${RUN_COMMAND}"
@@ -246,6 +251,8 @@ if [ -n "${INSTALL_PACKAGES}" ] || [ -n "${RUN_COMMAND}" ] || [ -n "${RUN_SCRIPT
 	[ -n "${RUN_SCRIPT}" ] && chroot_run ${SOURCEDIR}/vmroot "$(cat ${RUN_SCRIPT})"
 	
 	[ "${STARTCHROOT}" == "0" ] && LC_ALL=C LANGUAGE=C LANG=C chroot ${SOURCEDIR}/vmroot /bin/bash
+	
+	chroot_run ${SOURCEDIR}/vmroot "rm -f /sbin/initctl; dpkg-divert --local --rename --remove /sbin/initctl"
 	
 	chroot_run ${SOURCEDIR}/vmroot "sync"
 	umount_all

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-#set -x
+set -x
 
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -32,10 +32,12 @@ LOCKFILE=${TEMPDIR}.lock
 
 function umount_all() {
 	sync
+	set +e
 	[ -n "$(mount | grep ${TEMPDIR}/dev/pts)" ] && (umount ${TEMPDIR}/dev/pts || umount -f ${TEMPDIR}/dev/pts)
 	[ -n "$(mount | grep ${TEMPDIR}/dev)" ] && (umount ${TEMPDIR}/dev || umount -f ${TEMPDIR}/dev)
 	[ -n "$(mount | grep ${TEMPDIR}/proc)" ] && (umount ${TEMPDIR}/proc || umount -f ${TEMPDIR}/proc)
 	[ -n "$(mount | grep ${TEMPDIR}/sys)" ] && (umount ${TEMPDIR}/sys || umount -f ${TEMPDIR}/sys)
+	set -e
 }
 function clean_up() {
 	
@@ -187,14 +189,18 @@ if [ ! -f "${OUTFILE}" ]; then
 		test -e /proc/sys/fs/binfmt_misc/qemu-arm || update-binfmts --enable qemu-arm
 	fi
 	cp -f /etc/resolv.conf ${TEMPDIR}/etc/resolv.conf
-
+	#cp /proc/mounts /mnt/etc/mtab
+	
+	#[ -f /usr/share/keyrings/ubuntu-archive-keyring.gpg ] && cp -f /usr/share/keyrings/ubuntu-archive-keyring.gpg ${TEMPDIR}/usr/share/keyrings/ubuntu-archive-keyring.gpg
+	
 	chroot_run ${TEMPDIR} "/debootstrap/debootstrap --second-stage"
 
 	mount -t proc chproc ${TEMPDIR}/proc
 	mount -t sysfs chsys "${TEMPDIR}/sys"
 	mount -t devtmpfs chdev ${TEMPDIR}/dev || mount --bind /dev ${TEMPDIR}/dev
 	mount -t devpts chpts ${TEMPDIR}/dev/pts
-
+	
+	if [ "${SUITE}" == "wheezy" ]; then
 	cat <<EOF > ${TEMPDIR}/etc/apt/sources.list
 deb http://ftp.ch.debian.org/debian/ ${SUITE} main contrib non-free
 deb-src http://ftp.ch.debian.org/debian/ ${SUITE} main contrib non-free
@@ -203,11 +209,32 @@ deb-src http://security.debian.org/ ${SUITE}/updates main contrib non-free
 deb http://ftp.ch.debian.org/debian/ ${SUITE}-updates main contrib non-free
 deb-src http://ftp.ch.debian.org/debian/ ${SUITE}-updates main contrib non-free
 EOF
+	
 	chroot_run ${TEMPDIR} "apt-key adv --keyserver pgp.mit.edu --recv-keys 0x07DC563D1F41B907"
-
+	
 	if [ "${ARCH}" == "armhf" ]; then
 		echo "deb http://apt.armbian.com ${SUITE} main" > ${TEMPDIR}/etc/apt/sources.list.d/armbian.list
 		chroot_run ${TEMPDIR} "apt-key adv --keyserver keys.gnupg.net --recv-keys 0x93D6889F9F0E78D5"
+	fi
+	
+	elif [ "${SUITE}" == "trusty" ]; then
+	cat <<EOF >> ${TEMPDIR}/etc/apt/sources.list
+deb http://ports.ubuntu.com/ubuntu-ports/ trusty main restricted
+deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty main restricted
+deb http://ports.ubuntu.com/ubuntu-ports/ trusty-updates main restricted
+deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-updates main restricted
+deb http://ports.ubuntu.com/ubuntu-ports/ trusty universe
+deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty universe
+deb http://ports.ubuntu.com/ubuntu-ports/ trusty-updates universe
+deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-updates universe
+deb http://ports.ubuntu.com/ubuntu-ports/ trusty-security main restricted
+deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-security main restricted
+deb http://ports.ubuntu.com/ubuntu-ports/ trusty-security universe
+deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-security universe
+deb http://ports.ubuntu.com/ubuntu-ports/ trusty-security multiverse
+deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-security multiverse
+EOF
+	chroot_run ${TEMPDIR} "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0x2EA8F35793D8809A"
 	fi
 	
 	cat <<EOF > ${TEMPDIR}/etc/apt/apt.conf.d/71-no-recommends
@@ -215,21 +242,28 @@ APT::Install-Recommends "0";
 APT::Install-Suggests "0";
 EOF
 	
-	chroot_run ${TEMPDIR} "apt-get update"
+	chroot_run ${TEMPDIR} "dpkg-divert --local --rename --add /sbin/initctl; ln -s /bin/true /sbin/initctl"
+	
+	chroot_run ${TEMPDIR} "apt-get -y -q update"
+	chroot_run ${TEMPDIR} "apt-get -y -q upgrade"
 
 	DEST_LANG="en_US.UTF-8"
 	CONSOLE_CHAR="UTF-8"
 	chroot_install_packages ${TEMPDIR} "locales"
-	sed -i "s/^# $DEST_LANG/$DEST_LANG/" ${TEMPDIR}/etc/locale.gen
+	[ -f "${TEMPDIR}/etc/locale.gen" ] && sed -i "s/^# $DEST_LANG/$DEST_LANG/" ${TEMPDIR}/etc/locale.gen
 	chroot_run ${TEMPDIR} "locale-gen $DEST_LANG"
 	chroot_run ${TEMPDIR} "export CHARMAP=$CONSOLE_CHAR FONTFACE=8x16 LANG=$DEST_LANG LANGUAGE=$DEST_LANG DEBIAN_FRONTEND=noninteractive"
 	chroot_run ${TEMPDIR} "update-locale LANG=$DEST_LANG LANGUAGE=$DEST_LANG LC_MESSAGES=POSIX"
 
 	chroot_install_packages ${TEMPDIR} "console-setup console-data kbd console-common unicode-data"
-	sed -e 's/CHARMAP=".*"/CHARMAP="'$CONSOLE_CHAR'"/g' -i ${TEMPDIR}/etc/default/console-setup
+	[ -f "${TEMPDIR}/etc/default/console-setup" ] && sed -e 's/CHARMAP=".*"/CHARMAP="'$CONSOLE_CHAR'"/g' -i ${TEMPDIR}/etc/default/console-setup
 	
 	chroot_run ${TEMPDIR} "apt-get clean"
 	chroot_run ${TEMPDIR} "unset DEBIAN_FRONTEND"
+	
+	chroot_run ${TEMPDIR} "hostname -b vmroot"
+	
+	chroot_run ${TEMPDIR} "rm -f /sbin/initctl; dpkg-divert --local --rename --remove /sbin/initctl"
 	
 	chroot_run ${TEMPDIR} "sync"
 	umount_all
@@ -245,7 +279,7 @@ EOF
 	FILENAME=$(basename "${OUTFILE}")
 	tar -czp -C ${TEMPDIR} -f ${TEMPDIR}/../${FILENAME} --exclude=dev/* --exclude=proc/* --exclude=run/* --exclude=tmp/* --exclude=mnt/* .
 	
-	[ -d "${CACHEDIR}/rootfs" ] && rm -Rf ${CACHEDIR}/rootfs
+	[ -f "${OUTFILE}" ] && rm -f ${OUTFILE}
 	[ -d "${SOURCEDIR}/rootfs" ] && rm -Rf ${SOURCEDIR}/rootfs
 	[ -d "${BUILDDIR}/rootfs" ] && rm -Rf ${BUILDDIR}/rootfs
 	
