@@ -32,17 +32,24 @@ LOCKFILE=${TEMPDIR}.lock
 
 function clean_up() {
 	
-	echo "Clean up ..."
+	display_alert "info" "Clean up ..."
 	
 	rm -Rf "${TEMPDIR}"
 	rm -f "${LOCKFILE}"
 	
+	STOPTIME=`date +%s`
+	RUNTIME=$(((STOPTIME-STARTTIME)/60))
+	
 	trap "" SIGHUP SIGINT SIGTERM SIGQUIT EXIT
 	if [ "$1" != "0" ]; then
-		echo "ERROR ..."
+		display_alert "error" "failed ..."
+		display_alert "Runtime: $RUNTIME min"
+		sleep 1
 		exit $1
 	else
-		#echo " -> Done ..."
+		display_alert "ok" "Done ..."
+		display_alert "Runtime: $RUNTIME min"
+		sleep 1
 		exit 0
 	fi
 }
@@ -65,6 +72,17 @@ function help_exit() {
 }
 
 ################################################################################
+
+display_alert() {
+	local STR=""
+	[ "$3" != "" ] && STR="[\e[0;33m $3 \x1B[0m]"
+	if [ "$1" == "error" ]; then   echo -e "[\e[0;31m error \x1B[0m] $2 $STR"
+	elif [ "$1" == "warn" ]; then 	echo -e "[\e[0;36m warn \x1B[0m] $2 $STR"
+	elif [ "$1" == "info" ]; then 	echo -e "[\e[0;33m info \x1B[0m] $2 $STR"
+	elif [ "$1" == "ok" ]; then 	echo -e "[\e[0;32m o.k. \x1B[0m] $2 $STR"
+	else 							  echo -e "[\e[0;34m $1 \x1B[0m] $2 $STR"
+	fi
+}
 
 ################################################################################
 ## Need LOCKFILE
@@ -117,24 +135,28 @@ fi
 
 ################################################################################
 
-echo "[ ${SCRIPTNAME} ] ${BUILDDIR} ${CACHEDIR} ${SOURCEDIR}"
+display_alert "${SCRIPTNAME}" "${BUILDDIR} ${CACHEDIR} ${SOURCEDIR}"
 STARTTIME=`date +%s`
 
 if [ "$FORCEBUILD" == "0" ]; then
+	display_alert "warn" "Force redownload"
 	[ -d "${CACHEDIR}/u-boot-sunxi" ] && rm -Rf ${CACHEDIR}/u-boot-sunxi
 	[ -d "${SOURCEDIR}/u-boot-sunxi" ] && rm -Rf ${SOURCEDIR}/u-boot-sunxi
 	[ -d "${BUILDDIR}/u-boot-sunxi" ] && rm -Rf ${BUILDDIR}/u-boot-sunxi
 fi
 
 if [ "$FORCEEXTRACT" == "0" ]; then
+	display_alert "warn" "Force rebuild"
 	[ -d "${SOURCEDIR}/u-boot-sunxi" ] && rm -Rf ${SOURCEDIR}/u-boot-sunxi
 	[ -d "${BUILDDIR}/u-boot-sunxi" ] && rm -Rf ${BUILDDIR}/u-boot-sunxi
 fi
 
 if [ ! -f "${CACHEDIR}/u-boot-sunxi/u-boot-sunxi.src.tgz" ]; then
 	
-	git clone https://github.com/linux-sunxi/u-boot-sunxi.git ${TEMPDIR}/u-boot-sunxi
-	tar -cz -C ${TEMPDIR} -f ${TEMPDIR}/u-boot-sunxi.src.tgz u-boot-sunxi
+	display_alert "info" "Downloading Sources"
+	git clone https://github.com/linux-sunxi/u-boot-sunxi.git ${TEMPDIR}/u-boot-sunxi >/dev/null 2>&1
+	display_alert "info" "Save Sources to Cache"
+	tar -cz -C ${TEMPDIR} -f ${TEMPDIR}/u-boot-sunxi.src.tgz u-boot-sunxi >/dev/null 2>&1
 	
 	[ -d "${CACHEDIR}/u-boot-sunxi" ] && rm -Rf ${CACHEDIR}/u-boot-sunxi
 	[ -d "${SOURCEDIR}/u-boot-sunxi" ] && rm -Rf ${SOURCEDIR}/u-boot-sunxi
@@ -150,7 +172,8 @@ fi
 
 if [ ! -d "${SOURCEDIR}/u-boot-sunxi" ]; then
 	
-	tar -xz -C ${SOURCEDIR} -f ${CACHEDIR}/u-boot-sunxi/u-boot-sunxi.src.tgz
+	display_alert "info" "Extracting Sources"
+	tar -xz -C ${SOURCEDIR} -f ${CACHEDIR}/u-boot-sunxi/u-boot-sunxi.src.tgz >/dev/null 2>&1
 	
 	[ -d "${BUILDDIR}/u-boot-sunxi" ] && rm -Rf ${BUILDDIR}/u-boot-sunxi
 	
@@ -160,12 +183,14 @@ if [ ! -f "${BUILDDIR}/u-boot-sunxi/u-boot-sunxi-with-spl.bin" ]; then
 	
 	cd ${SOURCEDIR}/u-boot-sunxi
 	
-	make -j1 -s ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- clean
-	make -j1 Bananapro_defconfig CROSS_COMPILE=arm-linux-gnueabihf-
+	make -j1 -s ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- clean >/dev/null 2>&1
+	display_alert "info" "clean Build"
+	make -j1 Bananapro_defconfig CROSS_COMPILE=arm-linux-gnueabihf- >/dev/null 2>&1
+	display_alert "info" "configure for BananaPro"
 	
 	touch .scmversion
 	
-	[ -f .config ] && sed -i 's/CONFIG_LOCALVERSION=""/CONFIG_LOCALVERSION="-armbian"/g' .config
+	[ -f .config ] && sed -i 's/CONFIG_LOCALVERSION=""/CONFIG_LOCALVERSION="-sun7i"/g' .config
 	[ -f .config ] && sed -i 's/CONFIG_LOCALVERSION_AUTO=.*/# CONFIG_LOCALVERSION_AUTO is not set/g' .config
 	
 	if [ "$(cat .config | grep CONFIG_ARMV7_BOOT_SEC_DEFAULT=y)" == "" ]; then
@@ -173,7 +198,13 @@ if [ ! -f "${BUILDDIR}/u-boot-sunxi/u-boot-sunxi-with-spl.bin" ]; then
 		echo "CONFIG_OLD_SUNXI_KERNEL_COMPAT=y" >> .config
 	fi
 	
-	make -j5 CROSS_COMPILE=arm-linux-gnueabihf-
+	display_alert "ok" "Building u-boot"
+	make -j5 CROSS_COMPILE=arm-linux-gnueabihf- 2>/dev/null | (while read LINE; do
+		[ -n "${LINE}" ] && [ "${LINE:0:1}" != "#" ] && display_alert "ok" "${LINE}"
+		done)
+	
+	display_alert "ok" "$(echo ${LINE% *} | xargs)" "${LINE##* }"
+	display_alert "ok" "u-boot"
 	
 	mkdir -p ${BUILDDIR}/u-boot-sunxi
 	cp -f u-boot-sunxi-with-spl.bin ${BUILDDIR}/u-boot-sunxi/u-boot-sunxi-with-spl.bin
@@ -210,19 +241,14 @@ EOF
 	
 	cp -f ${BUILDDIR}/u-boot-sunxi/u-boot-sunxi-with-spl.bin ${TEMPDIR}/${DEBFOLDER}/usr/lib/${DEBNAME}/u-boot-sunxi-with-spl.bin
 	
-	dpkg -b ${TEMPDIR}/${DEBFOLDER} ${TEMPDIR}/${DEBNAME}.deb
+	dpkg -b ${TEMPDIR}/${DEBFOLDER} ${TEMPDIR}/${DEBNAME}.deb >/dev/null 2>&1
 	
 	FILESIZE=$(wc -c ${TEMPDIR}/${DEBNAME}.deb | cut -f 1 -d ' ')
 	[ $(wc -c ${TEMPDIR}/${DEBNAME}.deb | cut -f 1 -d ' ') -lt 50000 ] && (rm -f ${TEMPDIR}/${DEBNAME}.deb; clean_up 2)
 	cp -f ${TEMPDIR}/${DEBNAME}.deb ${BUILDDIR}/u-boot-sunxi/${DEBNAME}.deb
+	display_alert "ok" "deb Package"
 	
 fi
-
-STOPTIME=`date +%s`
-RUNTIME=$(((STOPTIME-STARTTIME)/60))
-echo "Runtime: $RUNTIME min"
-
-sleep 1
 
 clean_up 0
 

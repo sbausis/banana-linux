@@ -37,14 +37,19 @@ function clean_up() {
 	rm -Rf "${TEMPDIR}"
 	rm -f "${LOCKFILE}"
 	
+	STOPTIME=`date +%s`
+	RUNTIME=$(((STOPTIME-STARTTIME)/60))
+	
 	trap "" SIGHUP SIGINT SIGTERM SIGQUIT EXIT
 	if [ "$1" != "0" ]; then
 		display_alert "error" "failed ..."
 		display_alert "Runtime: $RUNTIME min"
+		sleep 1
 		exit $1
 	else
 		display_alert "ok" "Done ..."
 		display_alert "Runtime: $RUNTIME min"
+		sleep 1
 		exit 0
 	fi
 }
@@ -267,11 +272,6 @@ fi
 #	cp -f ${TEMPDIR}/${DEBNAME}.deb ${BUILDDIR}/u-boot-sunxi/${DEBNAME}.deb
 #	
 #fi
-
-STOPTIME=`date +%s`
-RUNTIME=$(((STOPTIME-STARTTIME)/60))
-
-sleep 1
 
 clean_up 0
 
