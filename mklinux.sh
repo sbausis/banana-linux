@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-#set -x
+set -x
 
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -87,6 +87,18 @@ function patch_folder() {
 		echo " -> patch ${PATCHFILE} already applied .!."
 		
 	fi
+}
+
+grab_kernel_version () {
+	#-------------------------------------------------------------------------------
+	# extract linux kernel version from Makefile
+	#-------------------------------------------------------------------------------
+	local VER=$(cat ${SOURCEDIR}/linux-sunxi/Makefile | grep VERSION | head -1 | awk '{print $(NF)}')
+	VER=${VER}.$(cat ${SOURCEDIR}/linux-sunxi/Makefile | grep PATCHLEVEL | head -1 | awk '{print $(NF)}')
+	VER=${VER}.$(cat ${SOURCEDIR}/linux-sunxi/Makefile | grep SUBLEVEL | head -1 | awk '{print $(NF)}')
+	local EXTRAVERSION=$(cat ${SOURCEDIR}/linux-sunxi/Makefile | grep EXTRAVERSION | head -1 | awk '{print $(NF)}' | cut -d '-' -f 2)
+	[ "${EXTRAVERSION}" != "=" ] && VER=${VER}${EXTRAVERSION}
+	echo $VER
 }
 
 ################################################################################
@@ -210,32 +222,23 @@ mkdir -p ${INSTALL_FW_PATH} 2>/dev/null
 INSTALL_HDR_PATH=${BUILDDIR}/linux-sunxi/headers
 mkdir -p ${INSTALL_HDR_PATH} 2>/dev/null
 
-VERSION=$(cd ${SOURCEDIR}/linux-sunxi && make kernelversion)
+VERSION=$(grab_kernel_version)
 CROSSARGS="ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf-"
 PATHARGS="O=${TMPBUILDDIR} INSTALL_MOD_PATH=${INSTALL_MOD_PATH} INSTALL_FW_PATH=${INSTALL_FW_PATH}  INSTALL_HDR_PATH=${INSTALL_HDR_PATH}"
 KBUILDARGS="KBUILD_DEBARCH=armhf KDEB_PKGVERSION=${VERSION} LOCALVERSION=-sun7i"
 MKARG="${CROSSARGS} ${PATHARGS} ${KBUILDARGS}"
 
-if [ ! -f "${TMPBUILDDIR}/.config" ]; then
+if [ ! -f "${BUILDDIR}/linux-sunxi/linux-image-${VERSION}-sun7i_${VERSION}_armhf.zImage" ]; then
 	
 	cd ${SOURCEDIR}/linux-sunxi
-	
-	make -j1 ${MKARG} clean 2>/dev/null
 	
 	CONFIGFOLDER="${SCRIPTDIR}/files/configs/linux-sunxi"
 	cp -f ${CONFIGFOLDER}/bananapro_defconfig ${TMPBUILDDIR}/.config 2>/dev/null
-	
 	make -j1 ${MKARG} oldconfig 2>/dev/null
-	
-fi
-
-if [ ! -f "${BUILDDIR}/linux-sunxi/zImage" ]; then
-	
-	cd ${SOURCEDIR}/linux-sunxi
 	
 	make -j5 ${MKARG} all zImage 2>/dev/null
 	
-	cp -f ${TMPBUILDDIR}/arch/arm/boot/zImage ${BUILDDIR}/linux-sunxi/zImage
+	cp -f ${TMPBUILDDIR}/arch/arm/boot/zImage ${BUILDDIR}/linux-sunxi/linux-image-${VERSION}-sun7i_${VERSION}_armhf.zImage
 	
 fi
 
