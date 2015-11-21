@@ -45,6 +45,7 @@ function clean_up() {
 	display_alert "info" "Clean up ..."
 	umount_all
 	
+	[ -n "$(mount | grep ${TEMPDIR})" ] && (umount ${TEMPDIR} || umount -f ${TEMPDIR})
 	rm -Rf "${TEMPDIR}"
 	rm -f "${LOCKFILE}"
 	
@@ -204,6 +205,7 @@ fi
 if [ ! -f "${OUTFILE}" ]; then
 	
 	umount_all
+	mount -t tmpfs -o size=1024M none ${TEMPDIR}
 	
 	display_alert "info" "download Packages for ${SUITE}" "${ARCH}"
 	debootstrap --arch=${ARCH} --foreign ${SUITE} ${TEMPDIR} 2>/dev/null | (while read LINE; do
@@ -220,11 +222,15 @@ if [ ! -f "${OUTFILE}" ]; then
 	
 	#[ -f /usr/share/keyrings/ubuntu-archive-keyring.gpg ] && cp -f /usr/share/keyrings/ubuntu-archive-keyring.gpg ${TEMPDIR}/usr/share/keyrings/ubuntu-archive-keyring.gpg
 	
-	display_alert "info" "debootstrap"
+	display_alert "info" "starting debootstrap Stage 2"
 	chroot_run ${TEMPDIR} "/debootstrap/debootstrap --second-stage" 2>/dev/null | (while read LINE; do
 		LINE="${LINE#I:*}"
 		[ -n "${LINE}" ] && [ "${LINE:0:1}" != "#" ] && display_alert "ok" "${LINE}"
 		done)
+	#debootstrap --second-stage --second-stage-target=${TEMPDIR} 2>/dev/null | (while read LINE; do
+	#	LINE="${LINE#I:*}"
+	#	[ -n "${LINE}" ] && [ "${LINE:0:1}" != "#" ] && display_alert "ok" "${LINE}"
+	#	done)
 	
 	display_alert "info" "mount RootFS"
 	mount -t proc chproc ${TEMPDIR}/proc
@@ -243,11 +249,11 @@ deb http://ftp.ch.debian.org/debian/ ${SUITE}-updates main contrib non-free
 deb-src http://ftp.ch.debian.org/debian/ ${SUITE}-updates main contrib non-free
 EOF
 	
-	chroot_run ${TEMPDIR} "apt-key adv --keyserver pgp.mit.edu --recv-keys 0x07DC563D1F41B907" >/dev/null 2>&1
+	chroot_run ${TEMPDIR} "apt-key adv --keyserver pgp.mit.edu --recv-keys 0x07DC563D1F41B907" >>./mkrootfs.log 2>&1
 	
 	if [ "${ARCH}" == "armhf" ]; then
 		echo "deb http://apt.armbian.com ${SUITE} main" > ${TEMPDIR}/etc/apt/sources.list.d/armbian.list
-		chroot_run ${TEMPDIR} "apt-key adv --keyserver keys.gnupg.net --recv-keys 0x93D6889F9F0E78D5" >/dev/null 2>&1
+		chroot_run ${TEMPDIR} "apt-key adv --keyserver keys.gnupg.net --recv-keys 0x93D6889F9F0E78D5" >>./mkrootfs.log 2>&1
 	fi
 	
 	elif [ "${SUITE}" == "trusty" ]; then
@@ -267,7 +273,7 @@ deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-security universe
 deb http://ports.ubuntu.com/ubuntu-ports/ trusty-security multiverse
 deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-security multiverse
 EOF
-	chroot_run ${TEMPDIR} "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0x2EA8F35793D8809A" >/dev/null 2>&1
+	chroot_run ${TEMPDIR} "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0x2EA8F35793D8809A" >>./mkrootfs.log 2>&1
 	fi
 	
 	cat <<EOF > ${TEMPDIR}/etc/apt/apt.conf.d/71-no-recommends
@@ -275,37 +281,42 @@ APT::Install-Recommends "0";
 APT::Install-Suggests "0";
 EOF
 	
-	chroot_run ${TEMPDIR} "dpkg-divert --local --rename --add /sbin/initctl; ln -s /bin/true /sbin/initctl" >/dev/null 2>&1
+	chroot_run ${TEMPDIR} "dpkg-divert --local --rename --add /sbin/initctl; ln -s /bin/true /sbin/initctl" >>./mkrootfs.log 2>&1
 	
 	display_alert "info" "updating Apt-Sources"
-	chroot_run ${TEMPDIR} "apt-get -y -q update" 2>/dev/null | (while read LINE; do
-		[ -n "${LINE}" ] && [ "${LINE:0:1}" != "#" ] && display_alert "ok" "${LINE}"
-		done)
+	chroot_run ${TEMPDIR} "apt-get -y -q update" >>./mkrootfs.log 2>&1
 	#chroot_run ${TEMPDIR} "apt-get -y -q upgrade"
 	
-	display_alert "info" "install RootFS Locales"
+	display_alert "info" "Install RootFS Locales"
 	DEST_LANG="en_US.UTF-8"
 	CONSOLE_CHAR="UTF-8"
-	chroot_install_packages ${TEMPDIR} "locales"
+	chroot_install_packages ${TEMPDIR} "locales" >>./mkrootfs.log 2>&1
+	display_alert "ok" "Installed Locales"
 	
-	display_alert "info" "configuring RootFS Locales"
+	display_alert "info" "Configuring RootFS Locales"
 	[ -f "${TEMPDIR}/etc/locale.gen" ] && sed -i "s/^# $DEST_LANG/$DEST_LANG/" ${TEMPDIR}/etc/locale.gen
-	chroot_run ${TEMPDIR} "locale-gen $DEST_LANG"
-	chroot_run ${TEMPDIR} "export CHARMAP=$CONSOLE_CHAR FONTFACE=8x16 LANG=$DEST_LANG LANGUAGE=$DEST_LANG DEBIAN_FRONTEND=noninteractive"
-	chroot_run ${TEMPDIR} "update-locale LANG=$DEST_LANG LANGUAGE=$DEST_LANG LC_MESSAGES=POSIX"
+	chroot_run ${TEMPDIR} "locale-gen $DEST_LANG" >>./mkrootfs.log 2>&1
+	chroot_run ${TEMPDIR} "export CHARMAP=$CONSOLE_CHAR FONTFACE=8x16 LANG=$DEST_LANG LANGUAGE=$DEST_LANG DEBIAN_FRONTEND=noninteractive" >>./mkrootfs.log 2>&1
+	display_alert "ok" "Configured Locales"
 	
-	display_alert "info" "install & configuring RootFS Console"
-	chroot_install_packages ${TEMPDIR} "console-setup console-data kbd console-common unicode-data"
+	display_alert "info" "Generating Locales"
+	chroot_run ${TEMPDIR} "update-locale LANG=$DEST_LANG LANGUAGE=$DEST_LANG LC_MESSAGES=POSIX" >>./mkrootfs.log 2>&1
+	display_alert "ok" "Generated Locales"
+	
+	display_alert "info" "Install RootFS Console"
+	chroot_install_packages ${TEMPDIR} "console-setup console-data kbd console-common unicode-data" >>./mkrootfs.log 2>&1
 	[ -f "${TEMPDIR}/etc/default/console-setup" ] && sed -e 's/CHARMAP=".*"/CHARMAP="'$CONSOLE_CHAR'"/g' -i ${TEMPDIR}/etc/default/console-setup
+	display_alert "ok" "Installed Console"
+	
 	
 	display_alert "info" "cleanUp RootFS"
-	chroot_run ${TEMPDIR} "apt-get clean"
-	chroot_run ${TEMPDIR} "unset DEBIAN_FRONTEND"
+	chroot_run ${TEMPDIR} "apt-get clean" >>./mkrootfs.log 2>&1
+	chroot_run ${TEMPDIR} "unset DEBIAN_FRONTEND" >>./mkrootfs.log 2>&1
 	
 	display_alert "info" "set RootFS Hostname"
-	chroot_run ${TEMPDIR} "hostname -b vmroot"
+	chroot_run ${TEMPDIR} "hostname -b vmroot" >>./mkrootfs.log 2>&1
 	
-	chroot_run ${TEMPDIR} "rm -f /sbin/initctl; dpkg-divert --local --rename --remove /sbin/initctl" >/dev/null 2>&1
+	chroot_run ${TEMPDIR} "rm -f /sbin/initctl; dpkg-divert --local --rename --remove /sbin/initctl" >>./mkrootfs.log 2>&1
 	
 	display_alert "info" "unmount RootFS"
 	chroot_run ${TEMPDIR} "sync"
