@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-set -x
+#set -x
 
 export LANGUAGE=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -39,19 +39,28 @@ function umount_all() {
 	[ -n "$(mount | grep ${TEMPDIR}/sys)" ] && (umount ${TEMPDIR}/sys || umount -f ${TEMPDIR}/sys)
 	set -e
 }
+
 function clean_up() {
 	
-	echo "Clean up ..."
+	display_alert "info" "Clean up ..."
 	umount_all
+	
 	rm -Rf "${TEMPDIR}"
 	rm -f "${LOCKFILE}"
 	
+	STOPTIME=`date +%s`
+	RUNTIME=$(((STOPTIME-STARTTIME)/60))
+	
 	trap "" SIGHUP SIGINT SIGTERM SIGQUIT EXIT
 	if [ "$1" != "0" ]; then
-		echo "ERROR ..."
+		display_alert "error" "failed ..."
+		display_alert "Runtime: $RUNTIME min"
+		sleep 1
 		exit $1
 	else
-		#echo " -> Done ..."
+		display_alert "ok" "Done ..."
+		display_alert "Runtime: $RUNTIME min"
+		sleep 1
 		exit 0
 	fi
 }
@@ -91,6 +100,17 @@ function chroot_install_packages() {
 	LC_ALL=C LANGUAGE=C LANG=C DEBIAN_FRONTEND=noninteractive chroot "${DIRECTORY}" /bin/bash -c "apt-get -y -q install ${PACKAGES}"
 }
 
+display_alert() {
+	local STR=""
+	[ "$3" != "" ] && STR="[\e[0;33m $3 \x1B[0m]"
+	if [ "$1" == "error" ]; then   echo -e "[\e[0;31m error \x1B[0m] $2 $STR"
+	elif [ "$1" == "warn" ]; then 	echo -e "[\e[0;36m warn \x1B[0m] $2 $STR"
+	elif [ "$1" == "info" ]; then 	echo -e "[\e[0;33m info \x1B[0m] $2 $STR"
+	elif [ "$1" == "ok" ]; then 	echo -e "[\e[0;32m o.k. \x1B[0m] $2 $STR"
+	else 							  echo -e "[\e[0;34m $1 \x1B[0m] $2 $STR"
+	fi
+}
+
 ################################################################################
 ## Need LOCKFILE
 
@@ -111,6 +131,7 @@ OUTFILE=""
 ARCH=""
 SUITE=""
 STARTCHROOT=1
+MIRROR=""
 
 while getopts ":O:B:C:S:fxo:a:s:m" opt; do
 	case $opt in
@@ -163,17 +184,19 @@ fi
 
 ################################################################################
 
-echo "[ ${SCRIPTNAME} ] ${BUILDDIR} ${CACHEDIR} ${SOURCEDIR}"
-echo "[ ${SCRIPTNAME} ] ${SUITE} ${ARCH} ${OUTFILE}"
+display_alert "${SCRIPTNAME}" "${BUILDDIR} ${CACHEDIR} ${SOURCEDIR}"
+display_alert "${SCRIPTNAME}" "${SUITE} ${ARCH} ${OUTFILE}"
 STARTTIME=`date +%s`
 
 if [ "$FORCEBUILD" == "0" ]; then
+	display_alert "warn" "Force redownload"
 	[ -d "${CACHEDIR}/rootfs" ] && rm -Rf ${CACHEDIR}/rootfs
 	[ -d "${SOURCEDIR}/rootfs" ] && rm -Rf ${SOURCEDIR}/rootfs
 	[ -d "${BUILDDIR}/rootfs" ] && rm -Rf ${BUILDDIR}/rootfs
 fi
 
 if [ "$FORCEEXTRACT" == "0" ]; then
+	display_alert "warn" "Force rebuild"
 	[ -d "${SOURCEDIR}/rootfs" ] && rm -Rf ${SOURCEDIR}/rootfs
 	[ -d "${BUILDDIR}/rootfs" ] && rm -Rf ${BUILDDIR}/rootfs
 fi
@@ -182,7 +205,11 @@ if [ ! -f "${OUTFILE}" ]; then
 	
 	umount_all
 	
-	debootstrap --arch=${ARCH} --foreign ${SUITE} ${TEMPDIR}
+	display_alert "info" "download Packages for ${SUITE}" "${ARCH}"
+	debootstrap --arch=${ARCH} --foreign ${SUITE} ${TEMPDIR} 2>/dev/null | (while read LINE; do
+		LINE="${LINE#I:*}"
+		[ -n "${LINE}" ] && [ "${LINE:0:1}" != "#" ] && display_alert "ok" "${LINE}"
+		done)
 
 	if [ "${ARCH}" == "armhf" ]; then
 		cp -f /usr/bin/qemu-arm-static ${TEMPDIR}/usr/bin/qemu-arm-static
@@ -193,13 +220,19 @@ if [ ! -f "${OUTFILE}" ]; then
 	
 	#[ -f /usr/share/keyrings/ubuntu-archive-keyring.gpg ] && cp -f /usr/share/keyrings/ubuntu-archive-keyring.gpg ${TEMPDIR}/usr/share/keyrings/ubuntu-archive-keyring.gpg
 	
-	chroot_run ${TEMPDIR} "/debootstrap/debootstrap --second-stage"
-
+	display_alert "info" "debootstrap"
+	chroot_run ${TEMPDIR} "/debootstrap/debootstrap --second-stage" 2>/dev/null | (while read LINE; do
+		LINE="${LINE#I:*}"
+		[ -n "${LINE}" ] && [ "${LINE:0:1}" != "#" ] && display_alert "ok" "${LINE}"
+		done)
+	
+	display_alert "info" "mount RootFS"
 	mount -t proc chproc ${TEMPDIR}/proc
 	mount -t sysfs chsys "${TEMPDIR}/sys"
 	mount -t devtmpfs chdev ${TEMPDIR}/dev || mount --bind /dev ${TEMPDIR}/dev
 	mount -t devpts chpts ${TEMPDIR}/dev/pts
 	
+	display_alert "info" "updating RootFS Apt-Sources"
 	if [ "${SUITE}" == "wheezy" ]; then
 	cat <<EOF > ${TEMPDIR}/etc/apt/sources.list
 deb http://ftp.ch.debian.org/debian/ ${SUITE} main contrib non-free
@@ -210,11 +243,11 @@ deb http://ftp.ch.debian.org/debian/ ${SUITE}-updates main contrib non-free
 deb-src http://ftp.ch.debian.org/debian/ ${SUITE}-updates main contrib non-free
 EOF
 	
-	chroot_run ${TEMPDIR} "apt-key adv --keyserver pgp.mit.edu --recv-keys 0x07DC563D1F41B907"
+	chroot_run ${TEMPDIR} "apt-key adv --keyserver pgp.mit.edu --recv-keys 0x07DC563D1F41B907" >/dev/null 2>&1
 	
 	if [ "${ARCH}" == "armhf" ]; then
 		echo "deb http://apt.armbian.com ${SUITE} main" > ${TEMPDIR}/etc/apt/sources.list.d/armbian.list
-		chroot_run ${TEMPDIR} "apt-key adv --keyserver keys.gnupg.net --recv-keys 0x93D6889F9F0E78D5"
+		chroot_run ${TEMPDIR} "apt-key adv --keyserver keys.gnupg.net --recv-keys 0x93D6889F9F0E78D5" >/dev/null 2>&1
 	fi
 	
 	elif [ "${SUITE}" == "trusty" ]; then
@@ -234,7 +267,7 @@ deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-security universe
 deb http://ports.ubuntu.com/ubuntu-ports/ trusty-security multiverse
 deb-src http://ports.ubuntu.com/ubuntu-ports/ trusty-security multiverse
 EOF
-	chroot_run ${TEMPDIR} "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0x2EA8F35793D8809A"
+	chroot_run ${TEMPDIR} "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 0x2EA8F35793D8809A" >/dev/null 2>&1
 	fi
 	
 	cat <<EOF > ${TEMPDIR}/etc/apt/apt.conf.d/71-no-recommends
@@ -242,29 +275,39 @@ APT::Install-Recommends "0";
 APT::Install-Suggests "0";
 EOF
 	
-	chroot_run ${TEMPDIR} "dpkg-divert --local --rename --add /sbin/initctl; ln -s /bin/true /sbin/initctl"
+	chroot_run ${TEMPDIR} "dpkg-divert --local --rename --add /sbin/initctl; ln -s /bin/true /sbin/initctl" >/dev/null 2>&1
 	
-	chroot_run ${TEMPDIR} "apt-get -y -q update"
-	chroot_run ${TEMPDIR} "apt-get -y -q upgrade"
-
+	display_alert "info" "updating Apt-Sources"
+	chroot_run ${TEMPDIR} "apt-get -y -q update" 2>/dev/null | (while read LINE; do
+		[ -n "${LINE}" ] && [ "${LINE:0:1}" != "#" ] && display_alert "ok" "${LINE}"
+		done)
+	#chroot_run ${TEMPDIR} "apt-get -y -q upgrade"
+	
+	display_alert "info" "install RootFS Locales"
 	DEST_LANG="en_US.UTF-8"
 	CONSOLE_CHAR="UTF-8"
 	chroot_install_packages ${TEMPDIR} "locales"
+	
+	display_alert "info" "configuring RootFS Locales"
 	[ -f "${TEMPDIR}/etc/locale.gen" ] && sed -i "s/^# $DEST_LANG/$DEST_LANG/" ${TEMPDIR}/etc/locale.gen
 	chroot_run ${TEMPDIR} "locale-gen $DEST_LANG"
 	chroot_run ${TEMPDIR} "export CHARMAP=$CONSOLE_CHAR FONTFACE=8x16 LANG=$DEST_LANG LANGUAGE=$DEST_LANG DEBIAN_FRONTEND=noninteractive"
 	chroot_run ${TEMPDIR} "update-locale LANG=$DEST_LANG LANGUAGE=$DEST_LANG LC_MESSAGES=POSIX"
-
+	
+	display_alert "info" "install & configuring RootFS Console"
 	chroot_install_packages ${TEMPDIR} "console-setup console-data kbd console-common unicode-data"
 	[ -f "${TEMPDIR}/etc/default/console-setup" ] && sed -e 's/CHARMAP=".*"/CHARMAP="'$CONSOLE_CHAR'"/g' -i ${TEMPDIR}/etc/default/console-setup
 	
+	display_alert "info" "cleanUp RootFS"
 	chroot_run ${TEMPDIR} "apt-get clean"
 	chroot_run ${TEMPDIR} "unset DEBIAN_FRONTEND"
 	
+	display_alert "info" "set RootFS Hostname"
 	chroot_run ${TEMPDIR} "hostname -b vmroot"
 	
-	chroot_run ${TEMPDIR} "rm -f /sbin/initctl; dpkg-divert --local --rename --remove /sbin/initctl"
+	chroot_run ${TEMPDIR} "rm -f /sbin/initctl; dpkg-divert --local --rename --remove /sbin/initctl" >/dev/null 2>&1
 	
+	display_alert "info" "unmount RootFS"
 	chroot_run ${TEMPDIR} "sync"
 	umount_all
 	
@@ -276,6 +319,7 @@ EOF
 	KILLPROC=$(ps -uax | pgrep ntpd |        tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	KILLPROC=$(ps -uax | pgrep dbus-daemon | tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	
+	display_alert "info" "save rootFS"
 	FILENAME=$(basename "${OUTFILE}")
 	tar -czp -C ${TEMPDIR} -f ${TEMPDIR}/../${FILENAME} --exclude=dev/* --exclude=proc/* --exclude=run/* --exclude=tmp/* --exclude=mnt/* .
 	
@@ -290,12 +334,6 @@ EOF
 	mv -f ${TEMPDIR}/* ${SOURCEDIR}/rootfs/
 	
 fi
-
-STOPTIME=`date +%s`
-RUNTIME=$(((STOPTIME-STARTTIME)/60))
-echo "Runtime: $RUNTIME min"
-
-sleep 1
 
 clean_up 0
 
