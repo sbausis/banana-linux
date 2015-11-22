@@ -33,7 +33,8 @@ LOCKFILE=${TEMPDIR}.lock
 function clean_up() {
 	
 	display_alert "info" "Clean up ..."
-	
+	cd /tmp
+	[ -n "$(mount | grep ${TEMPDIR})" ] && (umount ${TEMPDIR} || umount -f ${TEMPDIR})
 	rm -Rf "${TEMPDIR}"
 	rm -f "${LOCKFILE}"
 	
@@ -138,46 +139,45 @@ fi
 display_alert "${SCRIPTNAME}" "${BUILDDIR} ${CACHEDIR} ${SOURCEDIR}"
 STARTTIME=`date +%s`
 
-mkdir -p ${BUILDDIR}
-mkdir -p ${CACHEDIR}
-mkdir -p ${SOURCEDIR}
-
 if [ "$FORCEBUILD" == "0" ]; then
 	display_alert "warn" "Force redownload"
-	[ -d "${CACHEDIR}/sunxi-tools" ] && rm -Rf ${CACHEDIR}/sunxi-tools
 	[ -d "${SOURCEDIR}/sunxi-tools" ] && rm -Rf ${SOURCEDIR}/sunxi-tools
+	[ -d "${CACHEDIR}/sunxi-tools" ] && rm -Rf ${CACHEDIR}/sunxi-tools
 	[ -d "${BUILDDIR}/sunxi-tools" ] && rm -Rf ${BUILDDIR}/sunxi-tools
 fi
 
 if [ "$FORCEEXTRACT" == "0" ]; then
 	display_alert "warn" "Force rebuild"
-	[ -d "${SOURCEDIR}/sunxi-tools" ] && rm -Rf ${SOURCEDIR}/sunxi-tools
 	[ -d "${BUILDDIR}/sunxi-tools" ] && rm -Rf ${BUILDDIR}/sunxi-tools
 fi
 
-if [ ! -f "${CACHEDIR}/sunxi-tools/sunxi-tools.src.tgz" ]; then
+mount -t tmpfs -o size=100M none ${TEMPDIR}
+
+if [ ! -f "${SOURCEDIR}/sunxi-tools/sunxi-tools.src.tgz" ]; then
 	
 	display_alert "info" "Downloading Sources"
 	git clone https://github.com/linux-sunxi/sunxi-tools ${TEMPDIR}/sunxi-tools >/dev/null 2>&1
-	display_alert "info" "Save Sources to Cache"
+	display_alert "info" "Save Sources"
 	tar -cz -C ${TEMPDIR} -f ${TEMPDIR}/sunxi-tools.src.tgz sunxi-tools >/dev/null 2>&1
 	
-	[ -d "${CACHEDIR}/sunxi-tools" ] && rm -Rf ${CACHEDIR}/sunxi-tools
 	[ -d "${SOURCEDIR}/sunxi-tools" ] && rm -Rf ${SOURCEDIR}/sunxi-tools
+	[ -d "${CACHEDIR}/sunxi-tools" ] && rm -Rf ${CACHEDIR}/sunxi-tools
 	[ -d "${BUILDDIR}/sunxi-tools" ] && rm -Rf ${BUILDDIR}/sunxi-tools
 	
-	mkdir -p ${CACHEDIR}/sunxi-tools
-	mv -f ${TEMPDIR}/sunxi-tools.src.tgz ${CACHEDIR}/sunxi-tools/sunxi-tools.src.tgz
-	
 	mkdir -p ${SOURCEDIR}/sunxi-tools
-	mv -f ${TEMPDIR}/sunxi-tools/* ${SOURCEDIR}/sunxi-tools/
+	mv -f ${TEMPDIR}/sunxi-tools.src.tgz ${SOURCEDIR}/sunxi-tools/sunxi-tools.src.tgz
 	
 fi
 
-if [ ! -d "${SOURCEDIR}/sunxi-tools" ]; then
+if [ ! -d "${TEMPDIR}/sunxi-tools" ]; then
 	
-	display_alert "info" "Extracting Sources"
-	tar -xz -C ${SOURCEDIR} -f ${CACHEDIR}/sunxi-tools/sunxi-tools.src.tgz >/dev/null 2>&1
+	if [ -f "${CACHEDIR}/sunxi-tools/sunxi-tools.cache.tgz" ]; then
+		display_alert "info" "Extracting Caches"
+		tar -xz -C ${TEMPDIR} -f ${CACHEDIR}/sunxi-tools/sunxi-tools.cache.tgz >/dev/null 2>&1
+	else
+		display_alert "info" "Extracting Sources"
+		tar -xz -C ${TEMPDIR} -f ${SOURCEDIR}/sunxi-tools/sunxi-tools.src.tgz >/dev/null 2>&1
+	fi
 	
 	[ -d "${BUILDDIR}/sunxi-tools" ] && rm -Rf ${BUILDDIR}/sunxi-tools
 	
@@ -185,7 +185,7 @@ fi
 
 if [ ! -d "${BUILDDIR}/sunxi-tools/sunxi-tools_host" ]; then
 	
-	cd ${SOURCEDIR}/sunxi-tools
+	cd ${TEMPDIR}/sunxi-tools
 	
 	make -j1 clean >/dev/null 2>&1
 	display_alert "info" "clean Build"
@@ -203,7 +203,7 @@ if [ ! -d "${BUILDDIR}/sunxi-tools/sunxi-tools_host" ]; then
 	display_alert "ok" "sunxi-nand-part"
 	
 	mkdir -p ${BUILDDIR}/sunxi-tools/sunxi-tools_host
-	mv -f sunxi-fexc sunxi-bootinfo sunxi-fel sunxi-nand-part ${BUILDDIR}/sunxi-tools/sunxi-tools_host/
+	cp -f sunxi-fexc sunxi-bootinfo sunxi-fel sunxi-nand-part ${BUILDDIR}/sunxi-tools/sunxi-tools_host/
 	(cd ${BUILDDIR}/sunxi-tools/sunxi-tools_host && ln -fs ./sunxi-fexc ./sunxi-bin2fex)
 	(cd ${BUILDDIR}/sunxi-tools/sunxi-tools_host && ln -fs ./sunxi-fexc ./sunxi-fex2bin)
 	
@@ -211,7 +211,7 @@ fi
 
 if [ ! -d "${BUILDDIR}/sunxi-tools/sunxi-tools_target" ]; then
 	
-	cd ${SOURCEDIR}/sunxi-tools
+	cd ${TEMPDIR}/sunxi-tools
 	
 	make -j1 CC=arm-linux-gnueabi-gcc clean >/dev/null 2>&1
 	display_alert "info" "clean Build" "armhf"
@@ -232,6 +232,16 @@ if [ ! -d "${BUILDDIR}/sunxi-tools/sunxi-tools_target" ]; then
 	mv -f sunxi-fexc sunxi-bootinfo sunxi-nand-part sunxi-pio ${BUILDDIR}/sunxi-tools/sunxi-tools_target/
 	(cd ${BUILDDIR}/sunxi-tools/sunxi-tools_target && ln -fs ./sunxi-fexc ./sunxi-bin2fex)
 	(cd ${BUILDDIR}/sunxi-tools/sunxi-tools_target && ln -fs ./sunxi-fexc ./sunxi-fex2bin)
+	
+fi
+
+if [ ! -f "${CACHEDIR}/sunxi-tools/sunxi-tools.cache.tgz" ]; then
+	
+	display_alert "info" "Save Sources to Cache"
+	tar -cz -C ${TEMPDIR} -f ${TEMPDIR}/sunxi-tools.cache.tgz sunxi-tools >/dev/null 2>&1
+	
+	mkdir -p ${CACHEDIR}/sunxi-tools
+	mv -f ${TEMPDIR}/sunxi-tools.cache.tgz ${CACHEDIR}/sunxi-tools/sunxi-tools.cache.tgz
 	
 fi
 
