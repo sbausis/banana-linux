@@ -33,11 +33,11 @@ LOCKFILE=${TEMPDIR}.lock
 function umount_all() {
 	sync
 	set +e
-	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/dev/pts)" ] && (umount ${SOURCEDIR}/vmroot/dev/pts || umount -f ${SOURCEDIR}/vmroot/dev/pts)
-	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/dev)" ] && (umount ${SOURCEDIR}/vmroot/dev || umount -f ${SOURCEDIR}/vmroot/dev)
-	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/proc)" ] && (umount ${SOURCEDIR}/vmroot/proc || umount -f ${SOURCEDIR}/vmroot/proc)
-	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/sys)" ] && (umount ${SOURCEDIR}/vmroot/sys || umount -f ${SOURCEDIR}/vmroot/sys)
-	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/tmp)" ] && (umount ${SOURCEDIR}/vmroot/tmp || umount -f ${SOURCEDIR}/vmroot/tmp)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/dev/pts)" ] && (umount ${SOURCEDIR}/vmroot/dev/pts || umount -f ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/dev/pts)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/dev)" ] && (umount ${SOURCEDIR}/vmroot/dev || umount -f ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/dev)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/proc)" ] && (umount ${SOURCEDIR}/vmroot/proc || umount -f ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/proc)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/sys)" ] && (umount ${SOURCEDIR}/vmroot/sys || umount -f ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/sys)
+	[ -n "$(mount | grep ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/tmp)" ] && (umount ${SOURCEDIR}/vmroot/tmp || umount -f ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/tmp)
 	set -e
 }
 function clean_up() {
@@ -165,14 +165,14 @@ if [ -z "${SOURCEDIR}" ]; then
 fi
 
 if [ -z "${ROOTFSFILE}" ]; then
-	ROOTFSFILE="${CACHEDIR}/rootfs/rootfs.${SUITE}.${ARCH}.tgz"
-	if [ -f "${CACHEDIR}/vmroot/vmroot.${SUITE}.${ARCH}.tgz" ]; then
-		ROOTFSFILE="${CACHEDIR}/vmroot/vmroot.${SUITE}.${ARCH}.tgz"
+	ROOTFSFILE="${CACHEDIR}/rootfs/${SUITE}/${ARCH}/rootfs.${SUITE}.${ARCH}.tgz"
+	if [ -f "${CACHEDIR}/vmroot/${SUITE}/${ARCH}/vmroot.${SUITE}.${ARCH}.tgz" ]; then
+		ROOTFSFILE="${CACHEDIR}/vmroot/${SUITE}/${ARCH}/vmroot.${SUITE}.${ARCH}.tgz"
 	fi
 fi
 
 if [ -z "${OUTFILE}" ]; then
-	OUTFILE="${CACHEDIR}/vmroot/vmroot.${SUITE}.${ARCH}.tgz"
+	OUTFILE="${CACHEDIR}/vmroot/${SUITE}/${ARCH}/vmroot.${SUITE}.${ARCH}.tgz"
 fi
 
 if [ -n "${RUN_SCRIPT}" ] && [ ! -f "${RUN_SCRIPT}" ]; then
@@ -194,14 +194,14 @@ echo "[ ${SCRIPTNAME} ] ${SUITE} ${ARCH} ${OUTFILE}"
 STARTTIME=`date +%s`
 
 if [ "$FORCEBUILD" == "0" ]; then
-	[ -d "${CACHEDIR}/vmroot" ] && rm -Rf ${CACHEDIR}/vmroot
-	[ -d "${SOURCEDIR}/vmroot" ] && rm -Rf ${SOURCEDIR}/vmroot
-	[ -d "${BUILDDIR}/vmroot" ] && rm -Rf ${BUILDDIR}/vmroot
+	[ -d "${CACHEDIR}/vmroot/${SUITE}/${ARCH}" ] && rm -Rf ${CACHEDIR}/vmroot/${SUITE}/${ARCH}
+	[ -d "${SOURCEDIR}/vmroot/${SUITE}/${ARCH}" ] && rm -Rf ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}
+	[ -d "${BUILDDIR}/vmroot/${SUITE}/${ARCH}" ] && rm -Rf ${BUILDDIR}/vmroot/${SUITE}/${ARCH}
 fi
 
 if [ "$FORCEEXTRACT" == "0" ]; then
-	[ -d "${SOURCEDIR}/vmroot" ] && rm -Rf ${SOURCEDIR}/vmroot
-	[ -d "${BUILDDIR}/vmroot" ] && rm -Rf ${BUILDDIR}/vmroot
+	[ -d "${SOURCEDIR}/vmroot/${SUITE}/${ARCH}" ] && rm -Rf ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}
+	[ -d "${BUILDDIR}/vmroot/${SUITE}/${ARCH}" ] && rm -Rf ${BUILDDIR}/vmroot/${SUITE}/${ARCH}
 fi
 
 if [ ! -f "${ROOTFSFILE}" ]; then
@@ -212,12 +212,12 @@ if [ ! -f "${ROOTFSFILE}" ]; then
 	
 fi
 
-if [ ! -d "${SOURCEDIR}/vmroot" ]; then
+if [ ! -d "${SOURCEDIR}/vmroot/${SUITE}/${ARCH}" ]; then
 	
-	mkdir -p ${SOURCEDIR}/vmroot
-	tar -xpz -C ${SOURCEDIR}/vmroot -f ${ROOTFSFILE}
+	mkdir -p ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}
+	tar -xpz -C ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} -f ${ROOTFSFILE}
 	
-	[ -d "${BUILDDIR}/vmroot" ] && rm -Rf ${BUILDDIR}/vmroot
+	[ -d "${BUILDDIR}/vmroot/${SUITE}/${ARCH}" ] && rm -Rf ${BUILDDIR}/vmroot/${SUITE}/${ARCH}
 	
 fi
 
@@ -226,41 +226,41 @@ if [ -n "${INSTALL_PACKAGES}" ] || [ -n "${RUN_COMMAND}" ] || [ -n "${RUN_SCRIPT
 	umount_all
 	
 	if [ "${ARCH}" == "armhf" ]; then
-		cp -f /usr/bin/qemu-arm-static ${SOURCEDIR}/vmroot/usr/bin/qemu-arm-static
+		cp -f /usr/bin/qemu-arm-static ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/usr/bin/qemu-arm-static
 		test -e /proc/sys/fs/binfmt_misc/qemu-arm || update-binfmts --enable qemu-arm
 	fi
-	cp -f /etc/resolv.conf ${SOURCEDIR}/vmroot/etc/resolv.conf
-	cp -f /etc/mtab ${SOURCEDIR}/vmroot/etc/mtab
+	cp -f /etc/resolv.conf ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/etc/resolv.conf
+	cp -f /etc/mtab ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/etc/mtab
 	#cp /proc/mounts /mnt/etc/mtab  
-	echo "vmroot" > ${SOURCEDIR}/vmroot/etc/hostname
+	echo "vmroot" > ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/etc/hostname
 	
-	mount --bind ${TEMPDIR} ${SOURCEDIR}/vmroot/tmp
-	mount -t proc chproc ${SOURCEDIR}/vmroot/proc
-	mount -t sysfs chsys ${SOURCEDIR}/vmroot/sys
-	mount -t devtmpfs chdev ${SOURCEDIR}/vmroot/dev || mount --bind /dev ${SOURCEDIR}/vmroot/dev
-	mount -t devpts chpts ${SOURCEDIR}/vmroot/dev/pts
+	mount --bind ${TEMPDIR} ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/tmp
+	mount -t proc chproc ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/proc
+	mount -t sysfs chsys ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/sys
+	mount -t devtmpfs chdev ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/dev || mount --bind /dev ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/dev
+	mount -t devpts chpts ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/dev/pts
 	
 	echo "### We are on VM right now ###"
 	
-	chroot_run ${SOURCEDIR}/vmroot "dpkg-divert --local --rename --add /sbin/initctl; ln -s /bin/true /sbin/initctl"
+	chroot_run ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} "dpkg-divert --local --rename --add /sbin/initctl; ln -s /bin/true /sbin/initctl"
 	
-	[ -n "${INSTALL_PACKAGES}" ] && chroot_install_packages ${SOURCEDIR}/vmroot "${INSTALL_PACKAGES}"
+	[ -n "${INSTALL_PACKAGES}" ] && chroot_install_packages ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} "${INSTALL_PACKAGES}"
 	
-	[ -n "${RUN_COMMAND}" ] && chroot_run ${SOURCEDIR}/vmroot "${RUN_COMMAND}"
+	[ -n "${RUN_COMMAND}" ] && chroot_run ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} "${RUN_COMMAND}"
 	
-	[ -n "${RUN_SCRIPT}" ] && chroot_run ${SOURCEDIR}/vmroot "$(cat ${RUN_SCRIPT})"
+	[ -n "${RUN_SCRIPT}" ] && chroot_run ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} "$(cat ${RUN_SCRIPT})"
 	
-	[ "${STARTCHROOT}" == "0" ] && LC_ALL=C LANGUAGE=C LANG=C chroot ${SOURCEDIR}/vmroot /bin/bash
+	[ "${STARTCHROOT}" == "0" ] && LC_ALL=C LANGUAGE=C LANG=C chroot ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} /bin/bash
 	
-	chroot_run ${SOURCEDIR}/vmroot "rm -f /sbin/initctl; dpkg-divert --local --rename --remove /sbin/initctl"
+	chroot_run ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} "rm -f /sbin/initctl; dpkg-divert --local --rename --remove /sbin/initctl"
 	
-	chroot_run ${SOURCEDIR}/vmroot "sync"
+	chroot_run ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} "sync"
 	umount_all
 	
 	if [ "${ARCH}" == "armhf" ]; then
-		rm -f ${TEMPDIR}/usr/bin/qemu-arm-static
+		rm -f ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/usr/bin/qemu-arm-static
 	fi
-	rm -f ${TEMPDIR}/etc/resolv.conf
+	rm -f ${SOURCEDIR}/vmroot/${SUITE}/${ARCH}/etc/resolv.conf
 	
 	KILLPROC=$(ps -uax | pgrep ntpd |        tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
 	KILLPROC=$(ps -uax | pgrep dbus-daemon | tail -1); [ -n "$KILLPROC" ] && kill -9 $KILLPROC;
@@ -277,10 +277,10 @@ if [ "${SAVE_CHANGES}" == "0" ]; then
 	umount_all
 	
 	FILENAME=$(basename "${OUTFILE}")
-	tar -czp -C ${SOURCEDIR}/vmroot -f ${TEMPDIR}/${FILENAME} --exclude=dev/* --exclude=proc/* --exclude=run/* --exclude=tmp/* --exclude=mnt/* .
+	tar -czp -C ${SOURCEDIR}/vmroot/${SUITE}/${ARCH} -f ${TEMPDIR}/${FILENAME} --exclude=dev/* --exclude=proc/* --exclude=run/* --exclude=tmp/* --exclude=mnt/* .
 	
-	[ -d "${CACHEDIR}/vmroot" ] && rm -Rf ${CACHEDIR}/vmroot
-	[ -d "${BUILDDIR}/vmroot" ] && rm -Rf ${BUILDDIR}/vmroot
+	[ -d "${CACHEDIR}/vmroot/${SUITE}/${ARCH}" ] && rm -Rf ${CACHEDIR}/vmroot/${SUITE}/${ARCH}
+	[ -d "${BUILDDIR}/vmroot/${SUITE}/${ARCH}" ] && rm -Rf ${BUILDDIR}/vmroot/${SUITE}/${ARCH}
 	
 	mkdir -p $(dirname ${OUTFILE})
 	mv -f ${TEMPDIR}/${FILENAME} ${OUTFILE}

@@ -176,7 +176,7 @@ if [ -z "${SOURCEDIR}" ]; then
 fi
 
 if [ -z "${OUTFILE}" ]; then
-	OUTFILE="${CACHEDIR}/rootfs/rootfs.${SUITE}.${ARCH}.tgz"
+	OUTFILE="${CACHEDIR}/rootfs/${SUITE}/${ARCH}/rootfs.${SUITE}.${ARCH}.tgz"
 fi
 
 if [ -z "${SUITE}" ] && [ -z "${ARCH}" ] && [ -z "${OUTDIR}" ] && [ -z "${BUILDDIR}" ] && [ -z "${CACHEDIR}" ] && [ -z "${SOURCEDIR}" ] && [ -z "${OUTFILE}" ]; then
@@ -191,15 +191,15 @@ STARTTIME=`date +%s`
 
 if [ "$FORCEBUILD" == "0" ]; then
 	display_alert "warn" "Force redownload"
-	[ -d "${CACHEDIR}/rootfs" ] && rm -Rf ${CACHEDIR}/rootfs
-	[ -d "${SOURCEDIR}/rootfs" ] && rm -Rf ${SOURCEDIR}/rootfs
-	[ -d "${BUILDDIR}/rootfs" ] && rm -Rf ${BUILDDIR}/rootfs
+	[ -d "${CACHEDIR}/rootfs/${SUITE}/${ARCH}" ] && rm -Rf ${CACHEDIR}/rootfs/${SUITE}/${ARCH}
+	[ -d "${SOURCEDIR}/rootfs/${SUITE}/${ARCH}" ] && rm -Rf ${SOURCEDIR}/rootfs/${SUITE}/${ARCH}
+	[ -d "${BUILDDIR}/rootfs/${SUITE}/${ARCH}" ] && rm -Rf ${BUILDDIR}/rootfs/${SUITE}/${ARCH}
 fi
 
 if [ "$FORCEEXTRACT" == "0" ]; then
 	display_alert "warn" "Force rebuild"
-	[ -d "${SOURCEDIR}/rootfs" ] && rm -Rf ${SOURCEDIR}/rootfs
-	[ -d "${BUILDDIR}/rootfs" ] && rm -Rf ${BUILDDIR}/rootfs
+	[ -d "${SOURCEDIR}/rootfs/${SUITE}/${ARCH}" ] && rm -Rf ${SOURCEDIR}/rootfs/${SUITE}/${ARCH}
+	[ -d "${BUILDDIR}/rootfs/${SUITE}/${ARCH}" ] && rm -Rf ${BUILDDIR}/rootfs/${SUITE}/${ARCH}
 fi
 
 if [ ! -f "${OUTFILE}" ]; then
@@ -335,14 +335,14 @@ EOF
 	tar -czp -C ${TEMPDIR} -f ${TEMPDIR}/../${FILENAME} --exclude=dev/* --exclude=proc/* --exclude=run/* --exclude=tmp/* --exclude=mnt/* .
 	
 	[ -f "${OUTFILE}" ] && rm -f ${OUTFILE}
-	[ -d "${SOURCEDIR}/rootfs" ] && rm -Rf ${SOURCEDIR}/rootfs
-	[ -d "${BUILDDIR}/rootfs" ] && rm -Rf ${BUILDDIR}/rootfs
+	[ -d "${SOURCEDIR}/rootfs/${SUITE}/${ARCH}" ] && rm -Rf ${SOURCEDIR}/rootfs/${SUITE}/${ARCH}
+	[ -d "${BUILDDIR}/rootfs/${SUITE}/${ARCH}" ] && rm -Rf ${BUILDDIR}/rootfs/${SUITE}/${ARCH}
 	
 	mkdir -p $(dirname ${OUTFILE})
 	mv -f ${TEMPDIR}/../${FILENAME} ${OUTFILE}
 	
-	mkdir -p ${SOURCEDIR}/rootfs
-	mv -f ${TEMPDIR}/* ${SOURCEDIR}/rootfs/
+	mkdir -p ${SOURCEDIR}/rootfs/${SUITE}/${ARCH}
+	mv -f ${TEMPDIR}/* ${SOURCEDIR}/rootfs/${SUITE}/${ARCH}/
 	
 fi
 
